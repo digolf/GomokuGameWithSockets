@@ -1,14 +1,15 @@
-from self import self
+import socket
+import sys
 
-from utils import StartGame
+if (len(sys.argv) != 3):
+    print('%s <ip> <porta>' % (sys.argv[0]))
+    sys.exit(0)
 
+ip = sys.argv[1]
+porta = int(sys.argv[2])
 
-def main(self):
-    StartGame.insere_botao_imprimir(self)
-    StartGame.insere_grid(self)
-    StartGame.exibe_grid(self)
+soquete = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+soquete.connect((ip, porta))
 
-
-#chamadas
-main(self)
-
+dados = soquete.recv(1024)
+soquete.close()
