@@ -46,15 +46,21 @@ def grid_on_click(i, j, event):
 
         counter += 1
 
-        soquete = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        soquete.connect((ip, porta))
+        try:
+            soquete = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            soquete.connect((ip, porta))
 
-        dados_send = json.dumps({"i": i, "j": j, "jogador": jogador, "board": board})
-        soquete.send(dados_send.encode())
-        dados = soquete.recv(1024)
-        dados = json.loads(dados.decode())
-        response = dados.get("response")
-        print(response)
+            dados_send = json.dumps({"i": i, "j": j, "jogador": jogador, "board": board})
+            soquete.send(dados_send.encode())
+
+            dados = soquete.recv(1024)
+            dados = json.loads(dados.decode())
+            
+            response = dados.get("response")
+            print(response)
+        except:
+            showinfo("Aviso!", "Não foi possível conectar ao servidor no momento. Por favor, tente novamente mais tarde. O jogo será encerrado.")
+            close_game()
         
         if bool(response):
             showinfo("FIM DE JOGO!", "Jogador " + str(jogador) + " venceu!")
@@ -64,9 +70,12 @@ def grid_on_click(i, j, event):
 
         soquete.close()
 
-def insere_botao_imprimir():
+def configura_janela():
     btn = tk.Button(root, text='Imprimir matriz no console', command=imprime_grid)
     btn.pack(side="bottom", pady="20")
+
+    root.iconbitmap('Themes/icons/Gomoku.ico')
+    root.winfo_toplevel().title("Socket's Gomoku")
 
 def exibe_grid():
     root.geometry("700x700")
@@ -94,7 +103,7 @@ if len(sys.argv) != 3:
 ip = sys.argv[1]
 porta = int(sys.argv[2])
 
-insere_botao_imprimir()
+configura_janela()
 insere_grid()
 exibe_grid()
 
