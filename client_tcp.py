@@ -59,7 +59,8 @@ def grid_on_click(i, j, event):
             response = dados.get("response")
             print(response)
         except:
-            showinfo("Aviso!", "Não foi possível conectar ao servidor no momento. Por favor, tente novamente mais tarde. O jogo será encerrado.")
+            showinfo("Aviso!", "Não foi possível conectar ao servidor no momento.")
+            showinfo("Aviso!", "O jogo será encerrado.")
             close_game()
         
         if bool(response):
