@@ -1,17 +1,23 @@
 import json
-import socket, pickle
+import socket
 import sys
 import tkinter as tk
-
 from tkinter.messagebox import showinfo
-from self import self
 
-# rotas globais
+#### ROTAS GLOBAIS - CLIENTE
+
 root = tk.Tk()
 board = [[0] * 15 for _ in range(15)]
 counter = 0
 
-def insere_grid(self):
+#### ROTAS GLOBAIS - CLIENTE
+
+# INÍCIO - MÉTODOS PRIVADOS DO CLIENTE
+
+def close_game():
+    root.destroy()
+
+def insere_grid():
     global gameframe
     gameframe = tk.Frame(root)
     gameframe.pack()
@@ -21,12 +27,9 @@ def insere_grid(self):
         for j, column in enumerate(row):
             L = tk.Label(gameframe, text="    ", bg="white" if board[i][j] == 0 else "white")
             L.grid(row=i, column=j, padx='4', pady='4')
-            L.bind('<Button-1>', lambda e, i=i, j=j: on_click(self, i, j, e))
+            L.bind('<Button-1>', lambda e, i=i, j=j: grid_on_click(i, j, e))
 
-def close_game(self):
-    root.destroy()
-
-def on_click(self, i, j, event):
+def grid_on_click(i, j, event):
     global counter
     global jogador
 
@@ -51,21 +54,21 @@ def on_click(self, i, j, event):
         dados = soquete.recv(1024)
         dados = json.loads(dados.decode())
         response = dados.get("response")
-
         print(response)
+        
         if bool(response):
             showinfo("FIM DE JOGO!", "Jogador " + str(jogador) + " venceu!")
-            close_game(self)
+            close_game()
         elif board[i][j] != jogador:
             showinfo("Aviso!", "Essa posição já foi selecionada!")
 
         soquete.close()
 
-
-def insere_botao_imprimir(self):
+def insere_botao_imprimir():
     btn = tk.Button(root, text='Imprimir matriz no console', command=imprime_grid)
     btn.pack(side="bottom", pady="20")
-def exibe_grid(self):
+
+def exibe_grid():
     root.geometry("700x700")
     root.mainloop()
 
@@ -80,7 +83,9 @@ def imprime_grid():
             else:
                 print("%d" % board[i][j], end=" ")
 
+# FIM - MÉTODOS PRIVADOS DO CLIENTE
 
+# INÍCIO - LÓGICA TCP DO CLIENTE
 
 if len(sys.argv) != 3:
     print('%s <ip> <porta>' % (sys.argv[0]))
@@ -89,8 +94,8 @@ if len(sys.argv) != 3:
 ip = sys.argv[1]
 porta = int(sys.argv[2])
 
-insere_botao_imprimir(self)
-insere_grid(self)
-exibe_grid(self)
+insere_botao_imprimir()
+insere_grid()
+exibe_grid()
 
-#close_game(self)
+# FIM - LÓGICA TCP DO CLIENTE

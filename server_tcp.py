@@ -1,7 +1,18 @@
+import json
 import socket
 import sys
-import json
 
+# INÍCIO - MÉTODOS PRIVADOS DO SERVIDOR
+
+def verifica_tabuleiro(i, j, jogador, board):
+    if verifica_linha(i, jogador_atual=jogador, board=board):
+        return True
+    if verifica_coluna(j, jogador_atual=jogador, board=board):
+        return True
+    if verifica_diagonal(jogador, board=board):
+        return True
+
+    return False
 
 def verifica_linha(i, jogador_atual, board):
     b = 0;
@@ -18,16 +29,6 @@ def verifica_linha(i, jogador_atual, board):
 
     return False
 
-def verifica_tabuleiro(i, j, jogador, board):
-    if verifica_linha(i, jogador_atual=jogador, board=board):
-        return True
-    if verifica_coluna(j, jogador_atual=jogador, board=board):
-        return True
-    if verifica_diagonal(jogador, board=board):
-        return True
-
-    return False
-
 def verifica_coluna(j, jogador_atual, board):
     b = 0;
     count = 0
@@ -41,7 +42,6 @@ def verifica_coluna(j, jogador_atual, board):
             count = 0
         b += 1
     return False
-
 
 def verifica_diagonal(jogador, board):
     max_col = len(board[0])
@@ -76,12 +76,15 @@ def verifica_diagonal(jogador, board):
 
     return False
 
+# FIM - MÉTODOS PRIVADOS DO SERVIDOR
+
+# INÍCIO - LÓGICA TCP DO SERVIDOR
 
 if (len(sys.argv) != 2):
     print('%s <porta>' % (sys.argv[0]))
     sys.exit(0)
 
-ip = '127.0.0.1'
+ip = '127.0.0.1' #localhost
 porta = int(sys.argv[1])
 
 soquete = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -107,4 +110,4 @@ while True:
     s.send(dados.encode())
     s.close()
 
-soquete.close()
+# FIM - LÓGICA TCP DO SERVIDOR
