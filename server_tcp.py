@@ -1,20 +1,21 @@
+from cmath import log
 import json
 import socket
 import sys
 
-# INÍCIO - MÉTODOS PRIVADOS DO SERVIDOR
+# INÍCIO - MÉTODOS PRIVADOS SERVIDOR
 
-def verifica_tabuleiro(i, j, jogador, board):
-    if verifica_linha(i, jogador_atual=jogador, board=board):
+def verificar_tabuleiro(i, j, jogador, board):
+    if verificar_linha(i, jogador_atual=jogador, board=board):
         return True
-    if verifica_coluna(j, jogador_atual=jogador, board=board):
+    if verificar_coluna(j, jogador_atual=jogador, board=board):
         return True
-    if verifica_diagonal(jogador, board=board):
+    if verificar_diagonal(jogador, board=board):
         return True
 
     return False
 
-def verifica_linha(i, jogador_atual, board):
+def verificar_linha(i, jogador_atual, board):
     b = 0;
     count = 0
     total = 14
@@ -29,7 +30,7 @@ def verifica_linha(i, jogador_atual, board):
 
     return False
 
-def verifica_coluna(j, jogador_atual, board):
+def verificar_coluna(j, jogador_atual, board):
     b = 0;
     count = 0
     total = 14
@@ -43,7 +44,7 @@ def verifica_coluna(j, jogador_atual, board):
         b += 1
     return False
 
-def verifica_diagonal(jogador, board):
+def verificar_diagonal(jogador, board):
     max_col = len(board[0])
     max_row = len(board)
     fdiag = [[] for _ in range(max_row + max_col - 1)]
@@ -76,9 +77,9 @@ def verifica_diagonal(jogador, board):
 
     return False
 
-# FIM - MÉTODOS PRIVADOS DO SERVIDOR
+# FIM - MÉTODOS PRIVADOS SERVIDOR
 
-# INÍCIO - LÓGICA TCP DO SERVIDOR
+# INÍCIO - LÓGICA TCP SERVIDOR
 
 if (len(sys.argv) != 2):
     print('%s <porta>' % (sys.argv[0]))
@@ -86,28 +87,59 @@ if (len(sys.argv) != 2):
 
 ip = '127.0.0.1' #localhost
 porta = int(sys.argv[1])
+nr_clientes = 0
+id_clientes = []
 
 soquete = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 soquete.bind((ip, porta))
-soquete.listen(10)
+soquete.listen(2)
 
 while True:
     s, cliente = soquete.accept()
-    #i, j, jogador = s.recv(1024)
     dados_recv = s.recv(1024)
     dados_recv = json.loads(dados_recv.decode())
+    clientId = dados_recv.get("clientId")
 
-    board = dados_recv.get("board")
-    i = dados_recv.get("i")
-    j = dados_recv.get("j")
-    jogador = dados_recv.get("jogador")
-
-    if verifica_tabuleiro(i, j, jogador, board=board):
-        dados = json.dumps({"i": i, "j": j,  "response": True})
+    if not clientId in id_clientes:
+        nr_clientes+=1
+        id_clientes.append(clientId)
+        print(f"Cliente {clientId} conectado.")
+        print("Clientes conectados:", nr_clientes)
+        dados = json.dumps({"nro_jogador": nr_clientes})
     else:
-        dados = json.dumps({"i": i, "j": j, "response": False})
+        dados = json.dumps({"message": 'Aguardando segundo jogador.'})
 
-    s.send(dados.encode())
-    s.close()
+    if nr_clientes <=2:
+        if nr_clientes > 1:
+            if dados_recv:
+                #print(dados_recv)
+                if dados_recv.get("message") == None:
+                    i = dados_recv.get("i")
+                    j = dados_recv.get("j")
+                    board = dados_recv.get("board")
+                    jogador = dados_recv.get("jogador")
 
-# FIM - LÓGICA TCP DO SERVIDOR
+                    if (i != None):
+                        if verificar_tabuleiro(i, j, jogador, board=board):
+                            dados = json.dumps({"i": i, "j": j,  "response": True})
+                            break # Encerra o jogo (servidor) aqui, por enquanto.
+                        else:
+                            dados = json.dumps({"i": i, "j": j, "response": False})
+
+                elif dados_recv.get("message") == "leaving":
+                    nr_clientes-=1
+                    print(f'Cliente {clientId} desconectado.')
+                    print("Clientes conectados:", nr_clientes)
+        else:
+            if dados_recv.get("message") == "leaving":
+                nr_clientes-=1
+                print(f'Cliente {clientId} desconectado.')
+                print("Clientes conectados:", nr_clientes)
+
+        s.send(dados.encode())
+        s.close()
+    else:
+        print('Número máximo de jogadores atingido para este servidor.')
+        break
+
+# FIM - LÓGICA TCP SERVIDOR
