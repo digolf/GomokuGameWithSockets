@@ -155,7 +155,6 @@ while True:
                 nr_clientes-=1
                 print(f'Cliente {clientId} desconectado.')
                 print("Clientes conectados:", nr_clientes)
-                print(ROOT_LOG)
 
         s.send(dados.encode())
         s.close()

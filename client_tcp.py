@@ -37,7 +37,7 @@ def inserir_grid():
     gameframe = tk.Frame(root)
     gameframe.pack()
 
-    atualizar_grid()
+    renderizar_grid()
 
 def on_click_grid(i, j, event):
     dados_rcv = obter_retorno_servidor(json.dumps({"clientId": clientId, "message": "posso_jogar"}))    #TODO -> REVISAR ISSO AQUI, FAZER NO PRÓPRIO CLIENTE SE POSSÍVEL USANDO UM BOOLEAN QUANDO ESTIVER AGUARDANDO RESPOSTA.
@@ -92,19 +92,21 @@ def verificar_status_jogada_servidor():
 
     if new_board != None:
         if new_board != board:
-            atualizar_grid()
+            renderizar_grid(new_board)
             return True
 
-    #soquete.close()
     return False
 
-def atualizar_grid():                                                   #TODO -> AJEITAR ISSO AQUI PRA RENDERIZAR CERTO.
-    linhas = len(board)
-    colunas = len(board[0])
+def renderizar_grid(board_in = None):                                    #TODO -> AJEITAR ISSO AQUI PRA RENDERIZAR CERTO.
+    board_temp = board
+    if board_in != None: board_temp = board_in
+
+    linhas = len(board_temp)
+    colunas = len(board_temp[0])
 
     for i in range(linhas):
         for j in range(colunas):
-            labels_grid = tk.Label(gameframe, text="      ", bg= "white" if board[i][j] == 0 else "gray" if board[i][j] == 1 else "black")
+            labels_grid = tk.Label(gameframe, text="      ", bg= "white" if board_temp[i][j] == 0 else "gray" if board_temp[i][j] == 1 else "black")
             labels_grid.grid(row=i, column=j, padx='6', pady='6')
             labels_grid.bind('<Button-1>', lambda e, i=i, j=j: on_click_grid(i, j, e))
 
@@ -125,10 +127,6 @@ def imprimir_grid():
 
 def conexao_servidor():
     retorno = obter_retorno_servidor(json.dumps({"clientId": clientId, "message": None}))
-
-    if retorno == None:
-        showinfo("Aviso!", "Ocorreu um erro ao tentar conectar ao servidor.")
-        fechar_janela()
 
     nro_jogador = retorno.get("nro_jogador")
     print("Conectado ao servidor com sucesso!")
