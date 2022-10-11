@@ -4,6 +4,7 @@ import sys
 import tkinter as tk
 import uuid
 from ast import arg
+from asyncio import sleep
 from email import message
 from tkinter.messagebox import showinfo
 from typing import Optional
@@ -37,34 +38,53 @@ def inserir_grid():
 
 def on_click_grid(i, j, event):
     global counter
-    jogador = 0
 
     if board[i][j] == 0:
+        color = "gray" if counter % 2 else "black"  # Famoso ternário do PYTHON :)
+        event.widget.config(bg=color)
+
+        if color == "gray":
+            board[i][j] = 1
+            jogador = 1
+        else:
+            board[i][j] = 2
+            jogador = 2
+
+        counter += 1
+
         dados = obter_retorno_servidor(json.dumps({"clientId": clientId, "i": i, "j": j, "jogador": jogador, "board": board}))
+
         if dados != None:
             response = dados.get("response")
             message = dados.get("message")
 
             if (message != None):
                 showinfo("Aviso!", message)
-            else:
-                color = "gray" if counter % 2 else "black" # Famoso ternário do PYTHON :)
-                event.widget.config(bg=color)
 
-                if color == "gray":
-                    board[i][j] = 1
-                    jogador = 1
-                else:
-                    board[i][j] = 2
-                    jogador = 2
+            if bool(response):
+                showinfo("FIM DE JOGO!", "Jogador " + str(jogador) + " venceu!")
+                fechar_janela(True)
+            elif board[i][j] != jogador:
+                showinfo("Aviso!", "Essa posição já foi selecionada!")
 
-                counter += 1
-            
-                if bool(response):
-                    showinfo("FIM DE JOGO!", "Jogador " + str(jogador) + " venceu!")
-                    fechar_janela(True)
-                elif board[i][j] != jogador:
-                    showinfo("Aviso!", "Essa posição já foi selecionada!")
+
+        while atualiza_board():
+            sleep(2000)
+
+
+def atualiza_board():
+    soquete2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    soquete2.connect((ip, porta))
+    soquete2.send(json.dumps({"message": "aguardando"}).encode())
+    dados_rcv = soquete2.recv(1024)
+    dados_rcv = json.loads(dados_rcv.decode())
+
+    if dados_rcv.get("board"):
+        print(dados_rcv.get("board"))
+        return False
+
+    soquete2.close()
+    return True
 
 def imprimir_grid():
     linhas = len(board)
@@ -82,7 +102,7 @@ def imprimir_grid():
 # INÍCIO - MÉTODOS ROOT CLIENTE
 
 def conexao_servidor():
-    retorno = obter_retorno_servidor(json.dumps({"clientId": clientId, "message": ""}))
+    retorno = obter_retorno_servidor(json.dumps({"clientId": clientId, "message": None}))
 
     if retorno == None:
         showinfo("Aviso!", "Ocorreu um erro ao tentar conectar ao servidor.")
@@ -103,7 +123,8 @@ def configurar_janela():
     btn = tk.Button(root, text='FecharTESTE', command=on_window_closing)
     btn.pack(side="bottom", pady="10")
 
-    root.iconbitmap('Themes/icons/Gomoku.ico')
+
+    #root.iconbitmap(bitmap='themes/icons/Gomoku.ico') ## ta com problema
     root.winfo_toplevel().title("Socket's Gomoku")
 
 def fechar_janela(confirmar_saida = False, evento_fechamento = False):
@@ -113,8 +134,7 @@ def fechar_janela(confirmar_saida = False, evento_fechamento = False):
         if sucesso_conexao_servidor():
             obter_retorno_servidor(json.dumps({"clientId": clientId, "message": "leaving"}))
 
-    if evento_fechamento == False:
-        root.destroy()
+    root.destroy()
 
 def on_window_closing():
     fechar_janela(True, True)

@@ -4,6 +4,10 @@ import socket
 import sys
 
 # INÍCIO - MÉTODOS PRIVADOS SERVIDOR
+aguardando_jogador = 0 # 0 false 1 True
+aguardando_jogador_1 = 0
+board = None
+
 
 def verificar_tabuleiro(i, j, jogador, board):
     if verificar_linha(i, jogador_atual=jogador, board=board):
@@ -92,7 +96,7 @@ id_clientes = []
 
 soquete = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 soquete.bind((ip, porta))
-soquete.listen(2)
+soquete.listen()
 
 while True:
     s, cliente = soquete.accept()
@@ -100,36 +104,48 @@ while True:
     dados_recv = json.loads(dados_recv.decode())
     clientId = dados_recv.get("clientId")
 
+
+    aguardando_message = dados_recv.get("message", None)
+
+    if aguardando_message != None:
+        dados = json.dumps({"board": board})
+        dados = dados.encode()
+        s.send(dados)
+
+
     if not clientId in id_clientes:
         nr_clientes+=1
         id_clientes.append(clientId)
         print(f"Cliente {clientId} conectado.")
         print("Clientes conectados:", nr_clientes)
         dados = json.dumps({"nro_jogador": nr_clientes})
-    else:
-        dados = json.dumps({"message": 'Aguardando segundo jogador.'})
 
-    if nr_clientes <=2:
-        if nr_clientes > 1:
-            if dados_recv:
-                #print(dados_recv)
-                if dados_recv.get("message") == None:
-                    i = dados_recv.get("i")
-                    j = dados_recv.get("j")
-                    board = dados_recv.get("board")
-                    jogador = dados_recv.get("jogador")
+    if nr_clientes <= 2:
+        if nr_clientes >= 1:
+            if dados_recv.get("message") == None:
+                print(dados_recv)
+                i = dados_recv.get("i")
+                j = dados_recv.get("j")
+                board = dados_recv.get("board")
+                jogador = dados_recv.get("jogador")
 
-                    if (i != None):
-                        if verificar_tabuleiro(i, j, jogador, board=board):
-                            dados = json.dumps({"i": i, "j": j,  "response": True})
-                            break # Encerra o jogo (servidor) aqui, por enquanto.
-                        else:
-                            dados = json.dumps({"i": i, "j": j, "response": False})
+                if (i != None):
+                    if verificar_tabuleiro(i, j, jogador, board=board):
+                        dados = json.dumps({"i": i, "j": j,  "response": True})
+                    else:
+                        dados = json.dumps({"i": i, "j": j, "response": False, "board": board, "jogador": jogador})
 
-                elif dados_recv.get("message") == "leaving":
-                    nr_clientes-=1
-                    print(f'Cliente {clientId} desconectado.')
-                    print("Clientes conectados:", nr_clientes)
+                if jogador == 1:
+                    aguardando_jogador_2 = 1
+                    aguardando_jogador_1 = 0
+                else:
+                    aguardando_jogador_2 = 0
+                    aguardando_jogador_1 = 1
+
+            elif dados_recv.get("message") == "leaving":
+                nr_clientes-=1
+                print(f'Cliente {clientId} desconectado.')
+                print("Clientes conectados:", nr_clientes)
         else:
             if dados_recv.get("message") == "leaving":
                 nr_clientes-=1
