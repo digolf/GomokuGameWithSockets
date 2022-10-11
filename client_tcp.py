@@ -4,7 +4,7 @@ import sys
 import tkinter as tk
 import uuid
 from ast import arg
-from asyncio import sleep
+from asyncio import CancelledError, get_event_loop, sleep
 from email import message
 from tkinter.messagebox import showinfo
 from typing import Optional
@@ -18,6 +18,12 @@ board = [[0] * 15 for _ in range(15)]
 
 clientId = uuid.uuid4().hex
 
+ROOT_LOG = "\033[1;33mROOT: \033[0;0m"
+ERROR_LOG = "\033[1;31mERROR: \033[0;0m"
+RUNTIME_LOG = "\033[0;32mRUNTIME: \033[0;0m"
+FUNCTION_LOG = "\033[0;35mFUNCTION: \033[0;0m"
+FUNCTION_ARGS_LOG = "\033[0;35mFUNCTION_ARGS: \033[0;0m"
+
 #soquete = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 #### ROTAS GLOBAIS - CLIENTE
@@ -26,17 +32,20 @@ clientId = uuid.uuid4().hex
 
 def inserir_grid():
     global gameframe
-    gameframe = tk.Frame(root)
-    gameframe.pack()
     global i, j
 
-    for i, row in enumerate(board):
-        for j, column in enumerate(row):
-            L = tk.Label(gameframe, text="    ", bg="white" if board[i][j] == 0 else "white")
-            L.grid(row=i, column=j, padx='4', pady='4')
-            L.bind('<Button-1>', lambda e, i=i, j=j: on_click_grid(i, j, e))
+    gameframe = tk.Frame(root)
+    gameframe.pack()
+
+    atualizar_grid()
 
 def on_click_grid(i, j, event):
+    dados_rcv = obter_retorno_servidor(json.dumps({"clientId": clientId, "message": "posso_jogar"}))    #TODO -> REVISAR ISSO AQUI, FAZER NO PRÓPRIO CLIENTE SE POSSÍVEL USANDO UM BOOLEAN QUANDO ESTIVER AGUARDANDO RESPOSTA.
+    response = dados_rcv.get("response")
+    if not bool(response):
+        showinfo("Aviso!", "Aguarde a sua vez de jogar.")
+        return
+        
     global counter
 
     if board[i][j] == 0:
@@ -67,24 +76,37 @@ def on_click_grid(i, j, event):
             elif board[i][j] != jogador:
                 showinfo("Aviso!", "Essa posição já foi selecionada!")
 
+        retorno_servidor = False
+        timer = 0
 
-        while atualiza_board():
-            sleep(2000)
+        while retorno_servidor == False:
+            timer+=1
+            if timer == 100000:                                         #TODO -> AJEITAR ESSE "TIMER" PRA UM COMPONENTE NATIVO SE POSSÍVEL (N PESQUISEI KK).
+                print('teste')
+                retorno_servidor = verificar_status_jogada_servidor()
+                if not retorno_servidor: timer = 0
 
+def verificar_status_jogada_servidor():
+    dados_rcv = obter_retorno_servidor(json.dumps({"clientId": clientId, "jogador": nro_jogador, "message": "aguardando"}))
+    new_board = dados_rcv.get("board")
 
-def atualiza_board():
-    soquete2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    soquete2.connect((ip, porta))
-    soquete2.send(json.dumps({"message": "aguardando"}).encode())
-    dados_rcv = soquete2.recv(1024)
-    dados_rcv = json.loads(dados_rcv.decode())
+    if new_board != None:
+        if new_board != board:
+            atualizar_grid()
+            return True
 
-    if dados_rcv.get("board"):
-        print(dados_rcv.get("board"))
-        return False
+    #soquete.close()
+    return False
 
-    soquete2.close()
-    return True
+def atualizar_grid():                                                   #TODO -> AJEITAR ISSO AQUI PRA RENDERIZAR CERTO.
+    linhas = len(board)
+    colunas = len(board[0])
+
+    for i in range(linhas):
+        for j in range(colunas):
+            labels_grid = tk.Label(gameframe, text="      ", bg= "white" if board[i][j] == 0 else "gray" if board[i][j] == 1 else "black")
+            labels_grid.grid(row=i, column=j, padx='6', pady='6')
+            labels_grid.bind('<Button-1>', lambda e, i=i, j=j: on_click_grid(i, j, e))
 
 def imprimir_grid():
     linhas = len(board)
@@ -109,6 +131,12 @@ def conexao_servidor():
         fechar_janela()
 
     nro_jogador = retorno.get("nro_jogador")
+    print("Conectado ao servidor com sucesso!")
+
+    if nro_jogador == 1:
+        print("Você é o primeiro a jogar.")
+    else:
+        print("Você é o segundo a jogar.")
 
 def sucesso_conexao_servidor():
     return obter_retorno_servidor(json.dumps({"clientId": clientId, "message": ""}))
@@ -124,7 +152,7 @@ def configurar_janela():
     btn.pack(side="bottom", pady="10")
 
 
-    #root.iconbitmap(bitmap='themes/icons/Gomoku.ico') ## ta com problema
+    #root.iconbitmap(bitmap='themes/icons/Gomoku.ico') ----> TODO -> ESPECIFICAR CAMINHOS NO LINUX.
     root.winfo_toplevel().title("Socket's Gomoku")
 
 def fechar_janela(confirmar_saida = False, evento_fechamento = False):
@@ -132,7 +160,7 @@ def fechar_janela(confirmar_saida = False, evento_fechamento = False):
 
     if confirmar_saida:
         if sucesso_conexao_servidor():
-            obter_retorno_servidor(json.dumps({"clientId": clientId, "message": "leaving"}))
+            obter_retorno_servidor(json.dumps({"clientId": clientId, "message": "saindo"}))
 
     root.destroy()
 
@@ -140,7 +168,7 @@ def on_window_closing():
     fechar_janela(True, True)
 
 def configurar_mainloop_calls():
-    #root.protocol("WM_DELETE_WINDOW", on_window_closing())
+    #root.protocol("WM_DELETE_WINDOW", on_window_closing()) ----> TODO -> CONFIGURAR PARA FUNCIONAR QUANDO A JANELA FECHAR (ENVIAR INFO PARA O SERVER).
     root.geometry("700x700")
     root.mainloop()
 
