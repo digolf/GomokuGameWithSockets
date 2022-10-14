@@ -1,19 +1,18 @@
 import json
 import socket
 import sys
+import threading
+import time
 import tkinter as tk
 import uuid
-from ast import arg
-from asyncio import CancelledError, get_event_loop, sleep
-from email import message
 from tkinter.messagebox import showinfo
-from typing import Optional
 
 #### ROTAS GLOBAIS - CLIENTE
-nro_jogador = 0
+nro_jogador = 1
 
 counter = 0
 root = tk.Tk()
+teste = False
 board = [[0] * 15 for _ in range(15)]
 
 clientId = uuid.uuid4().hex
@@ -40,65 +39,70 @@ def inserir_grid():
     renderizar_grid()
 
 def on_click_grid(i, j, event):
-    dados_rcv = obter_retorno_servidor(json.dumps({"clientId": clientId, "message": "posso_jogar"}))    #TODO -> REVISAR ISSO AQUI, FAZER NO PRÓPRIO CLIENTE SE POSSÍVEL USANDO UM BOOLEAN QUANDO ESTIVER AGUARDANDO RESPOSTA.
-    response = dados_rcv.get("response")
-    if not bool(response):
+    global counter
+    localBoard = boardManager.getTabuleiro()
+
+    pode_jogar = obter_retorno_servidor(json.dumps({"clientId": clientId, "message": "posso_jogar"}))
+    response_pode_jogar = pode_jogar.get("response")
+
+    if bool(response_pode_jogar):
+        if localBoard[i][j] == 0:
+            retorno = obter_retorno_servidor(json.dumps({"clientId": clientId, "message": "nro_jogador"}))
+            nro_jogador = retorno.get("nro_jogador")
+            
+            color = "gray" if nro_jogador % 2 else "black"  # Famoso ternário do PYTHON :)
+            event.widget.config(bg=color)
+
+            localBoard[i][j] = nro_jogador
+
+            dados = obter_retorno_servidor(json.dumps({"clientId": clientId, "i": i, "j": j, "jogador": nro_jogador}))
+
+            if dados != None:
+                response = dados.get("response")
+                message = dados.get("message")
+
+                if (message != None):
+                    showinfo("Aviso!", message)
+
+                if bool(response):
+                    showinfo("FIM DE JOGO!", "Jogador " + str(nro_jogador) + " venceu!")
+                    fechar_janela(True)
+
+                if not interval.getStatus():
+                    interval.restartInterval()
+
+        elif localBoard[i][j] != nro_jogador:
+            showinfo("Aviso!", "Essa posição já foi selecionada!")
+
+    else:
         showinfo("Aviso!", "Aguarde a sua vez de jogar.")
         return
-        
-    global counter
 
-    if board[i][j] == 0:
-        color = "gray" if counter % 2 else "black"  # Famoso ternário do PYTHON :)
-        event.widget.config(bg=color)
-
-        if color == "gray":
-            board[i][j] = 1
-            jogador = 1
-        else:
-            board[i][j] = 2
-            jogador = 2
-
-        counter += 1
-
-        dados = obter_retorno_servidor(json.dumps({"clientId": clientId, "i": i, "j": j, "jogador": jogador, "board": board}))
-
-        if dados != None:
-            response = dados.get("response")
-            message = dados.get("message")
-
-            if (message != None):
-                showinfo("Aviso!", message)
-
-            if bool(response):
-                showinfo("FIM DE JOGO!", "Jogador " + str(jogador) + " venceu!")
-                fechar_janela(True)
-            elif board[i][j] != jogador:
-                showinfo("Aviso!", "Essa posição já foi selecionada!")
-
-        retorno_servidor = False
-        timer = 0
-
-        while retorno_servidor == False:
-            timer+=1
-            if timer == 100000:                                         #TODO -> AJEITAR ESSE "TIMER" PRA UM COMPONENTE NATIVO SE POSSÍVEL (N PESQUISEI KK).
-                print('teste')
-                retorno_servidor = verificar_status_jogada_servidor()
-                if not retorno_servidor: timer = 0
 
 def verificar_status_jogada_servidor():
-    dados_rcv = obter_retorno_servidor(json.dumps({"clientId": clientId, "jogador": nro_jogador, "message": "aguardando"}))
+    dados_rcv = obter_retorno_servidor(json.dumps({"clientId": clientId, "message": "aguardando"}))
     new_board = dados_rcv.get("board")
+    end_game = dados_rcv.get("end_game")
+
+    if end_game != None:
+        if bool(end_game):
+            nro_jogador = dados_rcv.get("nro_jogador")
+            showinfo("FIM DE JOGO!", "Jogador " + str(nro_jogador) + " venceu!")
+            fechar_janela(True)
 
     if new_board != None:
-        if new_board != board:
+        if new_board != boardManager.getTabuleiro():
+            boardManager.setTabuleiro(board=new_board)
             renderizar_grid(new_board)
+            if interval.getStatus():
+                interval.cancel()
+
             return True
 
     return False
 
-def renderizar_grid(board_in = None):                                    #TODO -> AJEITAR ISSO AQUI PRA RENDERIZAR CERTO.
-    board_temp = board
+def renderizar_grid(board_in = None):
+    board_temp = boardManager.getTabuleiro()
     if board_in != None: board_temp = board_in
 
     linhas = len(board_temp)
@@ -133,6 +137,7 @@ def conexao_servidor():
 
     if nro_jogador == 1:
         print("Você é o primeiro a jogar.")
+        interval.cancel()
     else:
         print("Você é o segundo a jogar.")
 
@@ -150,7 +155,7 @@ def configurar_janela():
     btn.pack(side="bottom", pady="10")
 
 
-    #root.iconbitmap(bitmap='themes/icons/Gomoku.ico') ----> TODO -> ESPECIFICAR CAMINHOS NO LINUX.
+    #root.iconbitmap(bitmap='themes/icons/Gomoku.ico')
     root.winfo_toplevel().title("Socket's Gomoku")
 
 def fechar_janela(confirmar_saida = False, evento_fechamento = False):
@@ -166,9 +171,51 @@ def on_window_closing():
     fechar_janela(True, True)
 
 def configurar_mainloop_calls():
-    #root.protocol("WM_DELETE_WINDOW", on_window_closing()) ----> TODO -> CONFIGURAR PARA FUNCIONAR QUANDO A JANELA FECHAR (ENVIAR INFO PARA O SERVER).
+    #root.protocol("WM_DELETE_WINDOW", on_window_closing())
     root.geometry("700x700")
     root.mainloop()
+
+StartTime=time.time()
+
+def action() :
+    verificar_status_jogada_servidor()
+    #print('action ! -> time : {:.1f}s'.format(time.time()-StartTime))
+
+class gerenciaTabuleiro :
+    def __init__(self) :
+        self.board = [[0] * 15 for _ in range(15)]
+    def setTabuleiro(self, board):
+        self.board = board
+    def getTabuleiro(self):
+        return self.board
+
+class setInterval :
+    def __init__(self,interval,action) :
+        self.interval=interval
+        self.action=action
+        self.status=False
+        self.stopEvent=threading.Event()
+        thread=threading.Thread(target=self.__setInterval)
+        thread.start()
+
+    def __setInterval(self) :
+        nextTime=time.time()+self.interval
+        while not self.stopEvent.wait(nextTime-time.time()) :
+            nextTime+=self.interval
+            self.status = True
+            self.action()
+            
+    def getStatus(self):
+        return self.status
+
+    def cancel(self) :
+        self.stopEvent.set()
+        self.status = False
+
+    def restartInterval(self):
+        self.stopEvent=threading.Event()
+        thread=threading.Thread(target=self.__setInterval)
+        thread.start()
 
 # FIM - MÉTODOS ROOT CLIENTE
 
@@ -195,13 +242,13 @@ if len(sys.argv) != 3:
 
 ip = sys.argv[1]
 porta = int(sys.argv[2])
+interval = setInterval(0.5, action)
+boardManager = gerenciaTabuleiro()
 
 configurar_janela()
 conexao_servidor()
 inserir_grid()
 
 configurar_mainloop_calls()
-
-#inicia_monitoramento_tabuleiro()
 
 # FIM - LÓGICA TCP CLIENTE

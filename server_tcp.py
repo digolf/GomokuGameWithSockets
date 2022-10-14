@@ -1,10 +1,9 @@
-from cmath import log
 import json
 import socket
 import sys
+from cmath import log
 
-primeiro_jogador_aguardando = 0
-board = None
+board = [[0] * 15 for _ in range(15)]
 
 ROOT_LOG = "\033[1;33mROOT: \033[0;0m"
 ERROR_LOG = "\033[1;31mERROR: \033[0;0m"
@@ -90,6 +89,14 @@ def verificar_diagonal(jogador, board):
 
 # INÍCIO - LÓGICA TCP SERVIDOR
 
+class gerenciaTabuleiro :
+    def __init__(self) :
+        self.board = [[0] * 15 for _ in range(15)]
+    def setTabuleiro(self, board):
+        self.board = board
+    def getTabuleiro(self):
+        return self.board
+
 if (len(sys.argv) != 2):
     print('%s <porta>' % (sys.argv[0]))
     sys.exit(0)
@@ -98,6 +105,9 @@ ip = '127.0.0.1' #localhost
 porta = int(sys.argv[1])
 nr_clientes = 0
 id_clientes = []
+primeiro_jogador_aguardando = 0
+boardManager = gerenciaTabuleiro()
+end_game = False
 
 soquete = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 soquete.bind((ip, porta))
@@ -116,43 +126,66 @@ while True:
         print("Clientes conectados:", nr_clientes)
         dados = json.dumps({"nro_jogador": nr_clientes})
 
+    if dados_recv.get("message") == 'get_board':
+        dados = json.dumps({"board": boardManager.getTabuleiro()})
+
     if nr_clientes <= 2:
         if nr_clientes >= 1:
             if dados_recv.get("message") == None:
                 i = dados_recv.get("i")
                 j = dados_recv.get("j")
-                board = dados_recv.get("board")
                 jogador = dados_recv.get("jogador")
+                boardTemp = [[0] * 15 for _ in range(15)]
+                boardTemp = boardManager.getTabuleiro()
                 
                 if (i != None):
-                    if verificar_tabuleiro(i, j, jogador, board=board):
-                        dados = json.dumps({"i": i, "j": j,  "response": True})
+                    if dados_recv.get("jogador") == 1:
+                        primeiro_jogador_aguardando = 1
                     else:
-                        dados = json.dumps({"i": i, "j": j, "response": False, "board": board, "jogador": jogador})
+                        primeiro_jogador_aguardando = 0
+
+                    boardTemp[i][j] = jogador
+
+                    if verificar_tabuleiro(i, j, jogador, board=boardTemp):
+                        dados = json.dumps({"response": True})
+                        end_game = True
+                    else:
+                        jogador = id_clientes.index(clientId) + 1
+                        dados = json.dumps({"response": False})
+
+                boardManager.setTabuleiro(board=boardTemp)
+
+            elif dados_recv.get("message") == "aguardando":
+                if end_game:
+                    dados = json.dumps({"end_game": end_game, "nro_jogador": jogador})
+                else:
+                    dados = json.dumps({"board": boardManager.getTabuleiro()})
+
+            elif dados_recv.get("message") == "nro_jogador":
+                jogador = id_clientes.index(clientId) + 1
+                dados = json.dumps({"nro_jogador": jogador})
 
             elif dados_recv.get("message") == "posso_jogar":
-                jogador = id_clientes.index(clientId)
-                if primeiro_jogador_aguardando and jogador == 1:
-                    dados = json.dumps({"response": False})
-                elif not primeiro_jogador_aguardando and jogador == 2:
-                    dados = json.dumps({"response": False})
+                jogador = id_clientes.index(clientId) + 1
+                if primeiro_jogador_aguardando == 1:
+                    if jogador == 1:
+                        dados = json.dumps({"response": False})
+                    else: 
+                        dados = json.dumps({"response": True})
                 else:
-                    dados = json.dumps({"response": True})
+                    if jogador == 2:
+                        dados = json.dumps({"response": False})
+                    else: 
+                        dados = json.dumps({"response": True})
 
             elif dados_recv.get("message") == "saindo":
                 nr_clientes-=1
                 print(f'Cliente {clientId} desconectado.')
                 print("Clientes conectados:", nr_clientes)
-            elif dados_recv.get("message") == "aguardando":
-                if dados_recv.get("jogador") == 1:
-                    primeiro_jogador_aguardando = 1
-                    dados = json.dumps({"board": board, "jogador": jogador})
-                else:
-                    primeiro_jogador_aguardando = 0
 
         else:
             if dados_recv.get("message") == "saindo":
-                nr_clientes-=1
+                nr_clientes = nr_clientes - 1 if nr_clientes > 0 else 0
                 print(f'Cliente {clientId} desconectado.')
                 print("Clientes conectados:", nr_clientes)
 
