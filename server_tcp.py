@@ -11,6 +11,16 @@ RUNTIME_LOG = "\033[0;32mRUNTIME: \033[0;0m"
 FUNCTION_LOG = "\033[0;35mFUNCTION: \033[0;0m"
 FUNCTION_ARGS_LOG = "\033[0;35mFUNCTION_ARGS: \033[0;0m"
 
+class gerenciaTabuleiro :
+    def __init__(self) :
+        self.board = [[0] * 15 for _ in range(15)]
+    def setTabuleiro(self, board):
+        self.board = board
+    def getTabuleiro(self):
+        return self.board
+    def resetTabuleiro(self):
+        self.board = [[0] * 15 for _ in range(15)]
+
 # INÍCIO - MÉTODOS PRIVADOS SERVIDOR
 
 def verificar_tabuleiro(i, j, jogador, board):
@@ -87,27 +97,28 @@ def verificar_diagonal(jogador, board):
 
 # FIM - MÉTODOS PRIVADOS SERVIDOR
 
+# INÍCIO - MÉTODOS ROOT CLIENTE
+
+def resetGame():
+    boardManager.resetTabuleiro()
+
+# FIM - MÉTODOS ROOT CLIENTE
+
 # INÍCIO - LÓGICA TCP SERVIDOR
 
-class gerenciaTabuleiro :
-    def __init__(self) :
-        self.board = [[0] * 15 for _ in range(15)]
-    def setTabuleiro(self, board):
-        self.board = board
-    def getTabuleiro(self):
-        return self.board
-
 if (len(sys.argv) != 2):
-    print('%s <porta>' % (sys.argv[0]))
+    print(ERROR_LOG, '%s <porta>' % (sys.argv[0]))
     sys.exit(0)
 
 ip = '127.0.0.1' #localhost
 porta = int(sys.argv[1])
 nr_clientes = 0
 id_clientes = []
+
+end_game = False
+jogo_iniciado = False
 primeiro_jogador_aguardando = 0
 boardManager = gerenciaTabuleiro()
-end_game = False
 
 soquete = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 soquete.bind((ip, porta))
@@ -122,15 +133,20 @@ while True:
     if not clientId in id_clientes:
         nr_clientes+=1
         id_clientes.append(clientId)
-        print(f"Cliente {clientId} conectado.")
-        print("Clientes conectados:", nr_clientes)
+        print(ROOT_LOG, f"Cliente {clientId} conectado.")
+        print(ROOT_LOG, "Clientes conectados:", nr_clientes)
         dados = json.dumps({"nro_jogador": nr_clientes})
 
     if dados_recv.get("message") == 'get_board':
         dados = json.dumps({"board": boardManager.getTabuleiro()})
 
+    if dados_recv.get("message") == "aguardando" or dados_recv.get("message") == "posso_jogar":
+        if nr_clientes < 2 and jogo_iniciado == True:
+            jogo_iniciado = False
+            dados = json.dumps({"player_left": True, "board": boardManager.getTabuleiro()})
+
     if nr_clientes <= 2:
-        if nr_clientes >= 1:
+        if nr_clientes > 1:
             if dados_recv.get("message") == None:
                 i = dados_recv.get("i")
                 j = dados_recv.get("j")
@@ -139,6 +155,8 @@ while True:
                 boardTemp = boardManager.getTabuleiro()
                 
                 if (i != None):
+                    jogo_iniciado = True
+
                     if dados_recv.get("jogador") == 1:
                         primeiro_jogador_aguardando = 1
                     else:
@@ -179,20 +197,29 @@ while True:
                         dados = json.dumps({"response": True})
 
             elif dados_recv.get("message") == "saindo":
-                nr_clientes-=1
-                print(f'Cliente {clientId} desconectado.')
-                print("Clientes conectados:", nr_clientes)
+                id_clientes.remove(clientId)
+                nr_clientes = nr_clientes - 1 if nr_clientes > 0 else 0
+                print(ROOT_LOG, f'Cliente {clientId} desconectado.')
+                print(ROOT_LOG, "Clientes conectados:", nr_clientes)
+
+            
+            if nr_clientes < 2:
+                print(ROOT_LOG, f'Limpando dados de jogo...')
+                primeiro_jogador_aguardando = 0
+                end_game = False
+                resetGame()
 
         else:
             if dados_recv.get("message") == "saindo":
+                id_clientes.remove(clientId)
                 nr_clientes = nr_clientes - 1 if nr_clientes > 0 else 0
-                print(f'Cliente {clientId} desconectado.')
-                print("Clientes conectados:", nr_clientes)
+                print(ROOT_LOG, f'Cliente {clientId} desconectado.')
+                print(ROOT_LOG, "Clientes conectados:", nr_clientes)
 
         s.send(dados.encode())
         s.close()
     else:
-        print('Número máximo de jogadores atingido para este servidor.')
+        print(ERROR_LOG, 'Número máximo de jogadores atingido para este servidor.')
         break
 
 # FIM - LÓGICA TCP SERVIDOR
